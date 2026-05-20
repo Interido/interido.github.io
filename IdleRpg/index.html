@@ -1,0 +1,1026 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Idle RPG</title>
+  <style>
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-dark: #0a0a1a;
+  --panel-bg: #1a1a2e;
+  --panel-border: #3a3a5c;
+  --text: #e0e0e0;
+  --text-dim: #8888aa;
+  --accent: #e63946;
+  --accent-green: #2a9d8f;
+  --accent-gold: #e9c46a;
+  --locked: #444;
+  --unlocked: #2a9d8f;
+  --selected: #e9c46a;
+}
+
+body {
+  background: var(--bg-dark);
+  color: var(--text);
+  font-family: 'Segoe UI', 'Consolas', monospace;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#game-container {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-rows: 1.4fr 1fr 1.2fr auto;
+  gap: 4px;
+  padding: 4px;
+  height: 100vh;
+  width: 100vw;
+}
+
+.panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel h2 {
+  font-size: 0.9rem;
+  color: var(--accent-gold);
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--panel-border);
+  padding-bottom: 4px;
+  flex-shrink: 0;
+}
+
+#combat-window { grid-column: 1 / 3; grid-row: 1; }
+
+#combat-window .combat-body {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+}
+#combat-window .combat-left { flex: 1; display: flex; flex-direction: column; }
+#combat-window .combat-right {
+  min-width: 110px;
+  border-left: 1px solid var(--panel-border);
+  padding-left: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  font-size: 0.75rem;
+}
+#combat-window .combat-right .stat-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+#combat-window .combat-right .stat-row span { color: var(--accent-gold); }
+
+#enemy-area, #player-area { margin-bottom: 8px; }
+#enemy-name, #player-name { font-weight: bold; margin-bottom: 4px; font-size: 0.95rem; }
+#enemy-name { color: var(--accent); }
+#player-name { color: var(--accent-green); }
+
+.health-bar {
+  background: #333;
+  border-radius: 4px;
+  height: 16px;
+  overflow: hidden;
+  margin: 3px 0;
+}
+
+.hp-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  width: 100%;
+}
+.hp-fill.player-hp { background: var(--accent-green); }
+
+#enemy-hp-text, #player-hp-text { font-size: 0.75rem; color: var(--text-dim); text-align: right; }
+
+#combat-info {
+  text-align: center;
+  color: var(--accent-gold);
+  font-size: 0.85rem;
+  margin-top: auto;
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+#map-window { grid-column: 3; grid-row: 1; }
+
+#locations-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.location {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--locked);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 0.75rem;
+  cursor: not-allowed;
+  opacity: 0.5;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.location.unlocked {
+  border-color: var(--unlocked);
+  opacity: 1;
+  cursor: pointer;
+}
+.location.unlocked:hover { background: rgba(42,157,143,0.1); }
+.location.active { border-color: var(--selected); background: rgba(233,196,106,0.1); box-shadow: 0 0 6px rgba(233,196,106,0.2); }
+
+.loc-icon { font-size: 1rem; }
+.loc-name { flex: 1; }
+.loc-level { font-size: 0.65rem; color: var(--text-dim); }
+.location.unlocked .loc-level { color: var(--unlocked); }
+.location.active .loc-level { color: var(--selected); }
+
+.location .monster-preview {
+  display: none;
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.location.active .monster-preview { display: block; }
+
+#log-window { grid-column: 1; grid-row: 2; }
+
+#log-content {
+  flex: 1;
+  overflow-y: auto;
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+#log-content::-webkit-scrollbar { width: 3px; }
+#log-content::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 2px; }
+
+.log-entry { padding: 1px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.log-entry.damage { color: var(--accent); }
+.log-entry.heal { color: var(--accent-green); }
+.log-entry.loot { color: var(--accent-gold); }
+.log-entry.info { color: var(--text-dim); }
+.log-entry.levelup { color: #a855f7; font-weight: bold; }
+.log-entry.unlock { color: var(--unlocked); font-weight: bold; }
+
+#backpack-window { grid-column: 1; grid-row: 3; }
+
+#backpack-content {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
+  gap: 4px;
+  align-content: start;
+}
+#backpack-content::-webkit-scrollbar { width: 3px; }
+#backpack-content::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 2px; }
+
+.item-slot {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 3px;
+  font-size: 0.7rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.item-slot:hover { background: rgba(255,255,255,0.1); border-color: var(--accent-gold); }
+.item-slot.common { border-color: #777; }
+.item-slot.uncommon { border-color: #2a9d8f; color: #2a9d8f; }
+.item-slot.rare { border-color: #3b82f6; color: #3b82f6; }
+.item-slot.epic { border-color: #a855f7; color: #a855f7; }
+.item-slot.legendary { border-color: #e9c46a; color: #e9c46a; }
+
+#drop-info { color: var(--text-dim); font-size: 0.75rem; text-align: center; padding: 6px; }
+
+#equipment-window { grid-column: 2 / 4; grid-row: 2; }
+
+#equipment-slots { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+
+.save-row {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+  align-items: center;
+}
+.save-btn {
+  flex: 1;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.75rem;
+  padding: 8px 4px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+.save-btn:hover { background: rgba(255,255,255,0.1); border-color: var(--accent-gold); }
+.save-btn.danger { border-color: var(--accent); }
+.save-btn.danger:hover { background: rgba(230,57,70,0.15); }
+
+.sell-btn {
+  margin-top: 2px;
+  background: rgba(233,196,106,0.08);
+  border: 1px solid var(--panel-border);
+  border-radius: 3px;
+  color: var(--accent-gold);
+  font-size: 0.55rem;
+  padding: 2px 4px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+  width: 100%;
+}
+.sell-btn:hover {
+  background: rgba(233,196,106,0.2);
+  border-color: var(--accent-gold);
+}
+
+.equip-slot {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.equip-slot:hover { background: rgba(255,255,255,0.08); }
+.slot-icon { font-size: 0.9rem; }
+.slot-label { flex-shrink: 0; color: var(--text-dim); font-size: 0.7rem; }
+.slot-value { color: var(--text-dim); font-size: 0.7rem; }
+.slot-value.equipped { color: var(--accent-gold); }
+
+#skills-window { grid-column: 2 / 4; grid-row: 3; }
+#save-panel { grid-column: 1 / 4; grid-row: 4; padding: 6px 10px; }
+
+#skills-content {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+  flex: 1;
+  align-content: start;
+}
+
+.skill-btn {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--panel-border);
+  border-radius: 5px;
+  color: var(--text);
+  padding: 5px 3px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  line-height: 1.3;
+  text-align: center;
+}
+.skill-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); border-color: var(--accent-gold); }
+.skill-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.skill-btn small { color: var(--text-dim); font-size: 0.6rem; }
+.skill-btn.on-cooldown { border-color: var(--accent); }
+.skill-btn.active-skill { border-color: var(--accent-gold); box-shadow: 0 0 6px rgba(233,196,106,0.3); }
+
+#tooltip {
+  position: fixed;
+  background: rgba(10, 10, 30, 0.95);
+  border: 1px solid var(--accent-gold);
+  border-radius: 5px;
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  color: var(--text);
+  pointer-events: none;
+  z-index: 9999;
+  max-width: 200px;
+  display: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  line-height: 1.4;
+}
+#tooltip .tt-title { color: var(--accent-gold); font-weight: bold; margin-bottom: 4px; }
+#tooltip .tt-desc { color: var(--text-dim); font-size: 0.7rem; }
+#tooltip .tt-stat { color: var(--accent-green); font-size: 0.7rem; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <div id="combat-window" class="panel">
+      <h2>⚔️ Combat</h2>
+      <div class="combat-body">
+        <div class="combat-left">
+          <div id="enemy-area">
+            <div id="enemy-name">Rat 🐀</div>
+            <div class="health-bar"><div id="enemy-hp-bar" class="hp-fill"></div></div>
+            <div id="enemy-hp-text">10 / 10</div>
+          </div>
+          <div id="player-area">
+            <div id="player-name">Hero 🧙</div>
+            <div class="health-bar"><div id="player-hp-bar" class="hp-fill player-hp"></div></div>
+            <div id="player-hp-text">50 / 50</div>
+          </div>
+          <div id="combat-info">Combat in progress...</div>
+        </div>
+        <div class="combat-right">
+          <div class="stat-row">❤️ HP <span id="stat-hp">50</span></div>
+          <div class="stat-row">⚔️ ATK <span id="stat-atk">5</span></div>
+          <div class="stat-row">🛡️ DEF <span id="stat-def">2</span></div>
+          <div class="stat-row">⚡ SPD <span id="stat-spd">0%</span></div>
+          <div class="stat-row">💰 Gold <span id="stat-gold">0</span></div>
+          <div class="stat-row">⭐ Lvl <span id="stat-level">1</span></div>
+          <div class="stat-row">📊 XP <span id="stat-xp">0</span>/<span id="stat-xp-max">20</span></div>
+          <div id="bonus-row" class="stat-row" style="color:#f4a261;display:none">🔥 XP +10%</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="map-window" class="panel">
+      <h2>🗺️ Map</h2>
+      <div id="locations-list"></div>
+    </div>
+
+    <div id="log-window" class="panel">
+      <h2>📜 Log</h2>
+      <div id="log-content"></div>
+    </div>
+
+    <div id="backpack-window" class="panel">
+      <h2>🎒 Backpack</h2>
+      <div id="backpack-content"></div>
+      <div id="drop-info">No items</div>
+    </div>
+
+    <div id="equipment-window" class="panel">
+      <h2>🛡️ Equipment</h2>
+      <div id="equipment-slots">
+        <div class="equip-slot" data-slot="helmet"><span class="slot-icon">📜</span><span class="slot-label">Helmet:</span><span class="slot-value">—</span></div>
+        <div class="equip-slot" data-slot="armor"><span class="slot-icon">👕</span><span class="slot-label">Armor:</span><span class="slot-value">—</span></div>
+        <div class="equip-slot" data-slot="weapon"><span class="slot-icon">⚔️</span><span class="slot-label">Weapon:</span><span class="slot-value">—</span></div>
+        <div class="equip-slot" data-slot="shield"><span class="slot-icon">🛡️</span><span class="slot-label">Shield:</span><span class="slot-value">—</span></div>
+        <div class="equip-slot" data-slot="boots"><span class="slot-icon">👢</span><span class="slot-label">Boots:</span><span class="slot-value">—</span></div>
+        <div class="equip-slot" data-slot="ring"><span class="slot-icon">💍</span><span class="slot-label">Ring:</span><span class="slot-value">—</span></div>
+      </div>
+    </div>
+
+    <div id="save-panel" class="panel">
+      <div class="save-row">
+        <button class="save-btn" onclick="saveGame()">💾 Save</button>
+        <button class="save-btn" onclick="exportSave()">📤 Export</button>
+        <button class="save-btn" onclick="importSave()">📥 Import</button>
+        <input type="file" id="import-file" accept=".txt,.json" style="display:none" onchange="handleImportFile(this)">
+        <button class="save-btn danger" onclick="resetGame()">🗑️ Reset</button>
+      </div>
+    </div>
+
+    <div id="skills-window" class="panel">
+      <h2>✨ Skills</h2>
+      <div id="skills-content">
+        <button class="skill-btn" data-skill="powerStrike" disabled>⚡ Power Strike<br><small>Lvl 1 | 10s</small></button>
+        <button class="skill-btn" data-skill="heal" disabled>💚 Healing<br><small>Lvl 2 | 15s</small></button>
+        <button class="skill-btn" data-skill="fireball" disabled>🔥 Fireball<br><small>Lvl 5 | 20s</small></button>
+        <button class="skill-btn" data-skill="berserk" disabled>😡 Berserk<br><small>Lvl 8 | 30s</small></button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+const LOCATIONS = [
+  { id: 'sewers', name: 'Sewers', icon: '🌧️', requiredLevel: 1, monsters: [
+    { name: 'Rat 🐀', hp: 10, atk: 2, def: 0, xp: 5, gold: [1, 3] },
+    { name: 'Bat 🦇', hp: 15, atk: 3, def: 0, xp: 8, gold: [2, 5] },
+    { name: 'Cockroach 🪳', hp: 8, atk: 1, def: 0, xp: 3, gold: [1, 2] },
+  ]},
+  { id: 'forest', name: 'Dark Forest', icon: '🌲', requiredLevel: 3, monsters: [
+    { name: 'Goblin 👺', hp: 25, atk: 5, def: 1, xp: 12, gold: [3, 8] },
+    { name: 'Wolf 🐺', hp: 20, atk: 6, def: 1, xp: 10, gold: [2, 6] },
+    { name: 'Spider 🕷️', hp: 18, atk: 4, def: 1, xp: 8, gold: [2, 5] },
+  ]},
+  { id: 'crypt', name: 'Old Crypt', icon: '🏚️', requiredLevel: 5, monsters: [
+    { name: 'Skeleton 💀', hp: 35, atk: 7, def: 2, xp: 18, gold: [5, 12] },
+    { name: 'Zombie 🧟', hp: 40, atk: 5, def: 3, xp: 15, gold: [4, 10] },
+    { name: 'Vampire 🧛', hp: 45, atk: 9, def: 2, xp: 22, gold: [6, 14] },
+  ]},
+  { id: 'cave', name: 'Deep Cave', icon: '⛰️', requiredLevel: 8, monsters: [
+    { name: 'Orc 🧌', hp: 55, atk: 10, def: 3, xp: 25, gold: [8, 18] },
+    { name: 'Troll 🗿', hp: 80, atk: 14, def: 5, xp: 40, gold: [12, 25] },
+    { name: 'Minotaur 🐂', hp: 70, atk: 12, def: 4, xp: 35, gold: [10, 20] },
+  ]},
+  { id: 'volcano', name: 'Volcano', icon: '🌋', requiredLevel: 12, monsters: [
+    { name: 'Dragon 🐉', hp: 150, atk: 22, def: 8, xp: 80, gold: [25, 50] },
+    { name: 'Hydra 🐍', hp: 120, atk: 18, def: 6, xp: 65, gold: [20, 40] },
+    { name: 'Demon 🔥', hp: 100, atk: 20, def: 5, xp: 55, gold: [18, 35] },
+  ]},
+  { id: 'abyss', name: 'Abyss', icon: '🌀', requiredLevel: 18, monsters: [
+    { name: 'Leviathan 🐋', hp: 300, atk: 35, def: 12, xp: 150, gold: [40, 80] },
+    { name: 'Anti-Hero 👹', hp: 250, atk: 40, def: 10, xp: 130, gold: [35, 70] },
+    { name: 'Wizard 🧙‍♂️', hp: 180, atk: 30, def: 8, xp: 100, gold: [30, 55] },
+  ]},
+  { id: 'void', name: 'Void', icon: '💫', requiredLevel: 25, monsters: [
+    { name: 'Void Entity 🌑', hp: 400, atk: 50, def: 15, xp: 200, gold: [60, 100] },
+    { name: 'Elder 👴', hp: 350, atk: 45, def: 14, xp: 180, gold: [50, 90] },
+    { name: 'Destroyer 💥', hp: 500, atk: 60, def: 18, xp: 250, gold: [70, 120] },
+  ]},
+];
+
+const game = {
+  player: { name: "Hero", level: 1, xp: 0, xpMax: 20, hp: 50, maxHp: 50, atk: 5, def: 2, gold: 0,
+    equipment: { helmet: null, armor: null, weapon: null, shield: null, boots: null, ring: null } },
+  enemy: null,
+  backpack: [],
+  maxBackpack: 24,
+  combatLog: [],
+  selectedLocation: 0,
+  skills: {
+    powerStrike: { name: "Power Strike", lvl: 1, cd: 10, timer: 0, mult: 2 },
+    heal: { name: "Healing", lvl: 2, cd: 15, timer: 0, healPct: 0.3 },
+    fireball: { name: "Fireball", lvl: 5, cd: 20, timer: 0, mult: 3 },
+    berserk: { name: "Berserk", lvl: 8, cd: 30, timer: 0, duration: 10, active: false, timer2: 0 },
+  },
+  unlockedLocations: new Set([0]),
+  exportBonusExpiry: 0,
+  combatTimer: null,
+  tickInterval: null,
+};
+
+const ITEM_RARITY = ["common","uncommon","rare","epic","legendary"];
+const ITEM_RARITY_COLORS = { common: 0.50, uncommon: 0.30, rare: 0.13, epic: 0.05, legendary: 0.02 };
+const SLOT_NAMES = {
+  helmet: ["Cap","Helmet","Crown"], armor: ["Shirt","Chainmail","Plate Armor"],
+  weapon: ["Stick","Sword","Axe","Staff"], shield: ["Plank","Shield","Tower Shield"],
+  boots: ["Sandals","Boots","Greaves"], ring: ["Ring","Power Ring","Life Ring"],
+};
+const SLOT_STATS = {
+  helmet:  ['maxHp'],
+  armor:   ['maxHp','def'],
+  weapon:  ['atk'],
+  shield:  ['def'],
+  boots:   ['atkSpd'],
+  ring:    ['atk','atkSpd'],
+};
+const STAT_LABELS = { atk:'ATK', def:'DEF', maxHp:'HP', atkSpd:'SPD' };
+const STAT_COLORS = { atk:'var(--accent)', def:'var(--accent-green)', maxHp:'#e63946', atkSpd:'#f4a261' };
+
+function rand(a,b){return Math.floor(Math.random()*(b-a+1))+a}
+function pickRarity(){let r=Math.random(),c=0;for(const R of ITEM_RARITY){c+=ITEM_RARITY_COLORS[R];if(r<=c)return R}return"common"}
+
+function generateItem(el){
+  const rar=pickRarity(),ri=ITEM_RARITY.indexOf(rar);
+  const slots=Object.keys(SLOT_NAMES);
+  const sl=slots[rand(0,slots.length-1)];
+  const nm=SLOT_NAMES[sl],n=nm[Math.min(ri,nm.length-1)];
+  const statTypes=SLOT_STATS[sl];
+  const itemLevel = Math.max(1, el + rand(-1, 2));
+  const it={id:Date.now()+Math.random(),name:`${n} +${itemLevel} (${rar})`,slot:sl,rarity:rar,itemLevel:itemLevel,stats:{},icon:({helmet:"📜",armor:"👕",weapon:"⚔️",shield:"🛡️",boots:"👢",ring:"💍"})[sl]||"📦"};
+  const lvlMult = 1 + (itemLevel - 1) * 0.15;
+  for(const st of statTypes){
+    let bv;
+    if(st==='atkSpd') bv = Math.floor((2 + ri*2) * lvlMult);
+    else bv = Math.floor((2 + ri*3) * lvlMult);
+    it.stats[st]=bv;
+  }
+  if(sl === 'ring' && ri >= 1){
+    const xpBonus = [0, 3, 5, 8, 12][ri];
+    it.stats.xpBonus = xpBonus;
+  }
+  const baseGold = [5, 15, 40, 100, 250][ri];
+  it.goldValue = Math.floor(baseGold * lvlMult);
+  return it;
+}
+
+function getAtkSpeedPct(){
+  let pct=0;
+  for(const s of Object.values(game.player.equipment)){if(s) pct+=s.stats.atkSpd||0}
+  return pct;
+}
+function getCombatInterval(){return Math.max(500,Math.floor(2000/(1+getAtkSpeedPct()/100)))}
+
+function checkLocationUnlocks(){
+  let newUnlocks = false;
+  for(let i=0;i<LOCATIONS.length;i++){
+    const loc = LOCATIONS[i];
+    if(!game.unlockedLocations.has(i) && game.player.level >= loc.requiredLevel){
+      game.unlockedLocations.add(i);
+      addLog(`🔓 Unlocked: ${loc.icon} ${loc.name}!`, 'unlock');
+      newUnlocks = true;
+    }
+  }
+  if(newUnlocks){ renderMap(); saveGame(); }
+}
+
+function selectLocation(idx){
+  if(!game.unlockedLocations.has(idx)) return;
+  game.selectedLocation = idx;
+  renderMap();
+  if(game.enemy) spawnEnemy();
+  addLog(`Changed location to: ${LOCATIONS[idx].icon} ${LOCATIONS[idx].name}`, 'info');
+  saveGame();
+}
+
+function renderMap(){
+  const el = document.getElementById('locations-list');
+  el.innerHTML = LOCATIONS.map((loc, i) => {
+    const unlocked = game.unlockedLocations.has(i);
+    const active = game.selectedLocation === i;
+    const monsterList = loc.monsters.map(m => m.name).join(', ');
+    return `<div class="location ${unlocked?'unlocked':''} ${active?'active':''}" onclick="selectLocation(${i})">
+      <span class="loc-icon">${loc.icon}</span>
+      <span class="loc-name">${loc.name}</span>
+      <span class="loc-level">${unlocked ? `Lvl ${loc.requiredLevel}` : `🔒 Lvl ${loc.requiredLevel}`}</span>
+      <div class="monster-preview">Monsters: ${monsterList}</div>
+    </div>`;
+  }).join('');
+}
+
+function spawnEnemy(){
+  const loc = LOCATIONS[game.selectedLocation];
+  const t = loc.monsters[rand(0, loc.monsters.length - 1)];
+  const ls = 1 + (game.player.level - 1) * 0.15;
+  game.enemy = {
+    name: t.name, hp: Math.floor(t.hp*ls), maxHp: Math.floor(t.hp*ls),
+    atk: Math.floor(t.atk*ls), def: Math.floor(t.def*ls),
+    xp: Math.floor(t.xp*ls), gold: t.gold,
+  };
+  addLog(`A wild ${game.enemy.name} appeared in ${loc.icon} ${loc.name}!`, 'info');
+  updateUI();
+}
+
+function addLog(t,type="info"){game.combatLog.push({text:t,type});if(game.combatLog.length>100)game.combatLog.shift();renderLog()}
+function renderLog(){const e=document.getElementById("log-content");e.innerHTML=game.combatLog.map(l=>`<div class="log-entry ${l.type}">${l.text}</div>`).join("");e.scrollTop=e.scrollHeight}
+
+function getPlayerStats(){
+  let a=game.player.atk,d=game.player.def,m=game.player.maxHp;
+  for(const s of Object.values(game.player.equipment)){if(s){a+=s.stats.atk||0;d+=s.stats.def||0;m+=s.stats.maxHp||0}}
+  if(game.skills.berserk.active){a=Math.floor(a*1.8);d=Math.floor(d*.5)}
+  return{atk:a,def:d,maxHp:m}
+}
+function getAtkSpeedPct(){
+  let pct=0;
+  for(const s of Object.values(game.player.equipment)){if(s) pct+=s.stats.atkSpd||0}
+  return pct;
+}
+function getCombatInterval(){return Math.max(500,Math.floor(2000/(1+getAtkSpeedPct()/100)))}
+function restartCombatTimer(){
+  if(game.combatTimer)clearInterval(game.combatTimer);
+  game.combatTimer=setInterval(()=>{if(game.enemy&&game.player.hp>0&&game.enemy.hp>0)combatTick()},getCombatInterval());
+}
+
+function combatTick(){
+  if(!game.enemy) return;
+  const st=getPlayerStats(),ed=Math.max(1,game.enemy.atk-st.def+rand(-1,2)),pd=Math.max(1,st.atk-game.enemy.def+rand(-1,2));
+  game.enemy.hp-=pd;addLog(`You deal ${pd} damage to ${game.enemy.name}`,"damage");
+  if(game.enemy.hp<=0){game.enemy.hp=0;addLog(`${game.enemy.name} defeated!`,"info");onEnemyKill();setTimeout(spawnEnemy,1500);updateUI();return}
+  game.player.hp-=ed;addLog(`${game.enemy.name} deals ${ed} damage`,"damage");
+  if(game.player.hp<=0){game.player.hp=0;addLog("You were defeated! Regenerating...","info");setTimeout(()=>{const s=getPlayerStats();game.player.hp=Math.floor(s.maxHp*.5);addLog("Regaining strength...","heal");updateUI()},2000);updateUI();return}
+  updateUI();
+}
+
+function onEnemyKill(){
+  const loc = LOCATIONS[game.selectedLocation];
+  const gd=rand(game.enemy.gold[0],game.enemy.gold[1]);
+  const mult=getXpMultiplier();
+  const xpGain = Math.floor(game.enemy.xp * mult);
+  game.player.gold+=gd;game.player.xp+=xpGain;
+  const ringBonus = getRingXpBonus();
+  const exportBonus = getExportBonusRemaining() > 0 ? 10 : 0;
+  const totalBonus = exportBonus + ringBonus;
+  const bonusTxt = totalBonus > 0 ? ` (+${totalBonus}%)` : '';
+  addLog(`+${gd} gold, +${xpGain} XP${bonusTxt} (${loc.icon} ${loc.name})`,"loot");
+  if(Math.random()<0.0225){const it=generateItem(game.player.level);if(game.backpack.length<game.maxBackpack){game.backpack.push(it);addLog(`Drop: ${it.name}`,"loot")}else addLog(`Backpack full! ${it.name} lost`,"info")}
+  while(game.player.xp>=game.player.xpMax){
+    game.player.xp-=game.player.xpMax;game.player.level++;
+    game.player.xpMax=Math.floor(game.player.xpMax*1.4);
+    game.player.maxHp+=10;game.player.atk+=2;game.player.def+=1;
+    const s=getPlayerStats();game.player.hp=s.maxHp;
+    addLog(`🎉 LEVEL UP! You are now level ${game.player.level}!`,"levelup");
+    checkLocationUnlocks();
+  }
+  renderBackpack();updateSkillButtons();
+}
+
+function equipItem(item){
+  const cur=game.player.equipment[item.slot];
+  if(cur)game.backpack.push(cur);
+  game.player.equipment[item.slot]=item;
+  game.backpack=game.backpack.filter(i=>i.id!==item.id);
+  const s=getPlayerStats();
+  if(game.player.hp>s.maxHp)game.player.hp=s.maxHp;
+  addLog(`Equipped: ${item.name}`,"info");
+  renderBackpack();updateUI();
+  restartCombatTimer();
+  saveGame();
+}
+function unequipItem(slot){
+  const it=game.player.equipment[slot];
+  if(!it)return;
+  if(game.backpack.length>=game.maxBackpack){addLog("Backpack full!","info");return}
+  game.backpack.push(it);game.player.equipment[slot]=null;
+  addLog(`Unequipped: ${it.name}`,"info");
+  renderBackpack();updateUI();
+  restartCombatTimer();
+  saveGame();
+}
+
+function renderBackpack(){
+  const el=document.getElementById("backpack-content"),di=document.getElementById("drop-info");
+  if(!game.backpack.length){el.innerHTML="";di.style.display="block";return}
+  di.style.display="none";
+  el.innerHTML=game.backpack.map(i=>{
+    const stats=Object.entries(i.stats).map(([k,v])=>`${STAT_LABELS[k]||k}+${v}${k==='atkSpd'||k==='xpBonus'?'%':''}`).join(", ");
+    return `<div class="item-slot ${i.rarity}" data-item-id="${i.id}">
+      <div onclick="handleItemClick(${i.id})">${i.icon}</div>
+      <div onclick="handleItemClick(${i.id})" style="font-size:0.65rem">${i.name}</div>
+      <div onclick="handleItemClick(${i.id})" style="font-size:0.55rem;color:#888">${stats}</div>
+      <button class="sell-btn" onclick="event.stopPropagation();sellItem(${i.id})">💰 ${i.goldValue}g</button>
+    </div>`;
+  }).join("");
+
+  el.querySelectorAll('.item-slot').forEach(slot => {
+    const id = parseFloat(slot.dataset.itemId);
+    const item = game.backpack.find(i => i.id === id);
+    if(!item) return;
+    slot.addEventListener('mouseenter', () => showCompareTooltip(item, slot));
+    slot.addEventListener('mouseleave', hideTooltip);
+  });
+}
+function handleItemClick(id){const it=game.backpack.find(i=>i.id===id);if(it)equipItem(it)}
+
+function sellItem(id){
+  const idx=game.backpack.findIndex(i=>i.id===id);
+  if(idx===-1)return;
+  const it=game.backpack[idx];
+  game.player.gold+=it.goldValue;
+  game.backpack.splice(idx,1);
+  addLog(`Sold ${it.name} for ${it.goldValue} gold`,"loot");
+  renderBackpack();updateUI();saveGame();
+}
+
+function updateUI(){
+  const st=getPlayerStats(),p=game.player;
+  const spd=getAtkSpeedPct();
+  document.getElementById("stat-hp").textContent=p.hp;
+  document.getElementById("stat-atk").textContent=st.atk;
+  document.getElementById("stat-def").textContent=st.def;
+  document.getElementById("stat-spd").textContent=spd+'%';
+  document.getElementById("stat-gold").textContent=p.gold;
+  document.getElementById("stat-level").textContent=p.level;
+  document.getElementById("stat-xp").textContent=p.xp;
+  document.getElementById("stat-xp-max").textContent=p.xpMax;
+  if(game.enemy){
+    document.getElementById("enemy-name").textContent=game.enemy.name;
+    document.getElementById("enemy-hp-bar").style.width=Math.max(0,game.enemy.hp/game.enemy.maxHp*100)+"%";
+    document.getElementById("enemy-hp-text").textContent=`${game.enemy.hp} / ${game.enemy.maxHp}`;
+  }
+  document.getElementById("player-hp-bar").style.width=Math.max(0,p.hp/st.maxHp*100)+"%";
+  document.getElementById("player-hp-text").textContent=`${p.hp} / ${st.maxHp}`;
+  const interval=getCombatInterval();
+  const bonusRem = getExportBonusRemaining();
+  const ringBonus = getRingXpBonus();
+  const bonusRow = document.getElementById('bonus-row');
+  const totalBonus = (bonusRem > 0 ? 10 : 0) + ringBonus;
+  if(totalBonus > 0){
+    bonusRow.style.display = 'flex';
+    const parts = [];
+    if(bonusRem > 0) parts.push(`export ${formatMs(bonusRem)}`);
+    if(ringBonus > 0) parts.push(`ring +${ringBonus}%`);
+    bonusRow.textContent = `🔥 XP +${totalBonus}% (${parts.join(', ')})`;
+  } else {
+    bonusRow.style.display = 'none';
+  }
+  document.getElementById("combat-info").textContent=game.enemy?`Fighting ${game.enemy.name} (${(interval/1000).toFixed(1)}s)`:"Searching...";
+  for(const[sl,it]of Object.entries(p.equipment)){
+    const se=document.querySelector(`.equip-slot[data-slot="${sl}"] .slot-value`);
+    if(it){se.textContent=it.name;se.className="slot-value equipped"}else{se.textContent="—";se.className="slot-value"}
+  }
+}
+
+function updateSkillButtons(){
+  const lv=game.player.level;
+  for(const[k,sk]of Object.entries(game.skills)){
+    const b=document.querySelector(`.skill-btn[data-skill="${k}"]`);
+    if(!b)continue;
+    b.disabled=lv<sk.lvl;
+    if(lv<sk.lvl)b.querySelector("small").textContent=`Requires Lvl ${sk.lvl}`;
+  }
+}
+
+function useSkill(k){
+  const sk=game.skills[k];
+  if(!sk||game.player.level<sk.lvl||sk.timer>0||!game.enemy)return;
+  if(k==="heal"){const st=getPlayerStats(),ha=Math.floor(st.maxHp*sk.healPct);game.player.hp=Math.min(game.player.hp+ha,st.maxHp);addLog(`Healing: +${ha} HP`,"heal");sk.timer=sk.cd}
+  else if(k==="berserk"){sk.active=true;sk.timer2=sk.duration;sk.timer=sk.cd;addLog("Berserk ACTIVE! ATK+80%, DEF-50%","levelup");document.querySelector(`.skill-btn[data-skill="${k}"]`).classList.add("active-skill")}
+  else if(k==="powerStrike"||k==="fireball"){const st=getPlayerStats(),dm=Math.max(1,Math.floor(st.atk*sk.mult)-game.enemy.def+rand(-1,3));game.enemy.hp-=dm;addLog(`${sk.name}: ${dm} damage!`,"damage");sk.timer=sk.cd;if(game.enemy.hp<=0){game.enemy.hp=0;addLog(`${game.enemy.name} defeated!`,"info");onEnemyKill();setTimeout(spawnEnemy,1500)}}
+  updateUI();updateSkillCooldowns();
+}
+
+function updateSkillCooldowns(){
+  for(const[k,sk]of Object.entries(game.skills)){
+    const b=document.querySelector(`.skill-btn[data-skill="${k}"]`);
+    if(!b)continue;
+    if(sk.timer>0){b.classList.add("on-cooldown");b.querySelector("small").textContent=`CD: ${sk.timer}s`}
+    else{b.classList.remove("on-cooldown");if(game.player.level>=sk.lvl)b.querySelector("small").textContent=`${sk.cd}s`}
+  }
+}
+
+function tickCooldowns(){
+  for(const[k,sk]of Object.entries(game.skills)){
+    if(sk.timer>0)sk.timer--;
+    if(k==="berserk"&&sk.active){sk.timer2--;if(sk.timer2<=0){sk.active=false;const b=document.querySelector(`.skill-btn[data-skill="${k}"]`);if(b)b.classList.remove("active-skill");addLog("Berserk faded","info")}}
+  }
+  updateSkillCooldowns();
+}
+
+function showTooltip(el, html){
+  const tt = document.getElementById('tooltip');
+  tt.innerHTML = html;
+  tt.style.display = 'block';
+  const rect = el.getBoundingClientRect();
+  let top = rect.top - tt.offsetHeight - 6;
+  let left = rect.left + rect.width/2 - tt.offsetWidth/2;
+  if(top < 4) top = rect.bottom + 6;
+  if(left < 4) left = 4;
+  if(left + tt.offsetWidth > window.innerWidth - 4) left = window.innerWidth - tt.offsetWidth - 4;
+  tt.style.top = top + 'px';
+  tt.style.left = left + 'px';
+}
+function hideTooltip(){
+  document.getElementById('tooltip').style.display = 'none';
+}
+
+function showCompareTooltip(item, el){
+  const equipped = game.player.equipment[item.slot];
+  const rarityColors = {common:'#888',uncommon:'#2a9d8f',rare:'#3b82f6',epic:'#a855f7',legendary:'#e9c46a'};
+  const rColor = rarityColors[item.rarity] || '#888';
+
+  let html = `<div class="tt-title" style="color:${rColor}">${item.icon} ${item.name}</div>`;
+  if(item.itemLevel){
+    html += `<div style="color:var(--text-dim);font-size:0.65rem">Item level: +${item.itemLevel}</div>`;
+  }
+  html += `<div style="color:var(--accent-gold);font-size:0.7rem;margin-top:2px">💰 Sell value: ${item.goldValue || 0}g</div>`;
+
+  const allStats = new Set([
+    ...Object.keys(item.stats || {}),
+    ...(equipped ? Object.keys(equipped.stats || {}) : [])
+  ]);
+
+  if(allStats.size > 0){
+    html += `<div style="margin-top:4px;border-top:1px solid var(--panel-border);padding-top:4px">`;
+    for(const stat of Array.from(allStats).sort()){
+      const itemVal = item.stats?.[stat] || 0;
+      const eqVal = equipped ? (equipped.stats?.[stat] || 0) : 0;
+      const diff = itemVal - eqVal;
+      const label = STAT_LABELS[stat] || stat;
+      const suffix = (stat === 'atkSpd' || stat === 'xpBonus') ? '%' : '';
+      const statColor = STAT_COLORS[stat] || '#888';
+
+      let diffHtml = '';
+      if(!equipped){
+        diffHtml = ` <span style="color:var(--accent-green)">(new)</span>`;
+      } else if(diff > 0){
+        diffHtml = ` <span style="color:var(--accent-green)">(+${diff})</span>`;
+      } else if(diff < 0){
+        diffHtml = ` <span style="color:var(--accent)">(${diff})</span>`;
+      } else {
+        diffHtml = ` <span style="color:var(--text-dim)">(=)</span>`;
+      }
+
+      html += `<div><span style="color:${statColor}">${label} +${itemVal}${suffix}</span>${diffHtml}</div>`;
+    }
+    html += `</div>`;
+  }
+
+  if(equipped){
+    html += `<div style="margin-top:4px;border-top:1px solid var(--panel-border);padding-top:4px;color:var(--text-dim);font-size:0.65rem">Equipped: <span style="color:var(--accent-gold)">${equipped.name}</span></div>`;
+  } else {
+    html += `<div style="margin-top:4px;color:var(--text-dim);font-size:0.65rem">Empty slot — click to equip</div>`;
+  }
+
+  showTooltip(el, html);
+}
+
+function setupTooltips(){
+  const SKILL_DESC = {
+    powerStrike: { title: 'Power Strike', desc: 'Deals double damage to the enemy.', stat: 'Multiplier: 2x ATK | CD: 10s' },
+    heal: { title: 'Healing', desc: 'Restores part of the hero\'s health.', stat: 'Healing: 30% max HP | CD: 15s' },
+    fireball: { title: 'Fireball', desc: 'Powerful magical attack.', stat: 'Multiplier: 3x ATK | CD: 20s' },
+    berserk: { title: 'Berserk', desc: 'Enters battle rage. ATK+80%, DEF-50%.', stat: 'Duration: 10s | CD: 30s' },
+  };
+
+  document.querySelectorAll('.skill-btn').forEach(btn => {
+    const key = btn.dataset.skill;
+    const info = SKILL_DESC[key];
+    if(!info) return;
+    btn.addEventListener('mouseenter', () => {
+      const sk = game.skills[key];
+      let req = '';
+      if(game.player.level < sk.lvl) req = `<div style="color:${'var(--accent)'};margin-top:4px">Requires level ${sk.lvl}</div>`;
+      showTooltip(btn, `<div class="tt-title">${info.title}</div><div class="tt-desc">${info.desc}</div><div class="tt-stat">${info.stat}</div>${req}`);
+    });
+    btn.addEventListener('mouseleave', hideTooltip);
+  });
+
+  document.querySelectorAll('.equip-slot').forEach(slot => {
+    slot.addEventListener('mouseenter', () => {
+      const key = slot.dataset.slot;
+      const item = game.player.equipment[key];
+      if(!item){
+        const slotNames = {helmet:'Helmet',armor:'Armor',weapon:'Weapon',shield:'Shield',boots:'Boots',ring:'Ring'};
+        showTooltip(slot, `<div class="tt-title">Empty slot</div><div class="tt-desc">Click to unequip item (when equipped)</div><div class="tt-stat">Slot: ${slotNames[key] || key}</div>`);
+        return;
+      }
+      const stats = Object.entries(item.stats).map(([k,v]) => {
+        const label = STAT_LABELS[k] || k;
+        const color = STAT_COLORS[k] || '#888';
+        const suffix = k==='atkSpd' || k==='xpBonus' ? '%' : '';
+        return `<span style="color:${color}">${label}+${v}${suffix}</span>`;
+      }).join('  ');
+      const rarityColors = {common:'#888',uncommon:'#2a9d8f',rare:'#3b82f6',epic:'#a855f7',legendary:'#e9c46a'};
+      const rColor = rarityColors[item.rarity] || '#888';
+      const lvlInfo = item.itemLevel ? `<div style="color:var(--text-dim);font-size:0.65rem">Item level: +${item.itemLevel}</div>` : '';
+      showTooltip(slot, `<div class="tt-title" style="color:${rColor}">${item.icon} ${item.name}</div>${lvlInfo}<div class="tt-desc">${stats}</div><div class="tt-stat" style="color:var(--text-dim)">Click to unequip</div>`);
+    });
+    slot.addEventListener('mouseleave', hideTooltip);
+  });
+}
+
+const SAVE_KEY = '**************';
+
+function serializeState(){
+  return JSON.stringify({
+    player: game.player,
+    backpack: game.backpack,
+    selectedLocation: game.selectedLocation,
+    unlockedLocations: Array.from(game.unlockedLocations),
+    exportBonusExpiry: game.exportBonusExpiry,
+    savedAt: Date.now(),
+  });
+}
+
+function saveGame(){
+  try {
+    localStorage.setItem(SAVE_KEY, serializeState());
+    addLog('💾 Game saved!', 'info');
+  } catch(e) {
+    addLog('❌ Save error: ' + e.message, 'damage');
+  }
+}
+
+function applyLoadedState(data){
+  if(data.player) {
+    game.player = data.player;
+    game.backpack = data.backpack || [];
+    game.selectedLocation = data.selectedLocation ?? 0;
+    game.unlockedLocations = new Set(data.unlockedLocations || [0]);
+    game.exportBonusExpiry = data.exportBonusExpiry || 0;
+    const s = getPlayerStats();
+    game.player.hp = s.maxHp;
+    return true;
+  }
+  return false;
+}
+
+function loadGame(){
+  const raw = localStorage.getItem(SAVE_KEY);
+  if(!raw) return false;
+  try { return applyLoadedState(JSON.parse(raw)); }
+  catch(e) { console.error('Load failed', e); }
+  return false;
+}
+
+function resetGame(){
+  if(!confirm('Are you sure you want to delete all progress and start over?')) return;
+  localStorage.removeItem(SAVE_KEY);
+  location.reload();
+}
+
+function getExportBonusRemaining(){
+  const now = Date.now();
+  const rem = game.exportBonusExpiry - now;
+  return rem > 0 ? rem : 0;
+}
+
+function getRingXpBonus(){
+  let bonus=0;
+  const ring=game.player.equipment.ring;
+  if(ring && ring.stats.xpBonus) bonus+=ring.stats.xpBonus;
+  return bonus;
+}
+function getXpMultiplier(){
+  let mult=1.0;
+  if(getExportBonusRemaining()>0) mult+=0.1;
+  mult+=getRingXpBonus()/100;
+  return mult;
+}
+
+function formatMs(ms){
+  const h = Math.floor(ms/3600000);
+  const m = Math.floor((ms%3600000)/60000);
+  return `${h}h ${m}m`;
+}
+
+function exportSave(){
+  const data = serializeState();
+  const blob = new Blob([data], {type: 'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'idle-rpg-save.txt';
+  a.click();
+  URL.revokeObjectURL(url);
+  const now = Date.now();
+  const cooldown = 2*3600000;
+  const bonusDuration = 1*3600000;
+  if(now >= game.exportBonusExpiry - bonusDuration + cooldown){
+    game.exportBonusExpiry = now + bonusDuration;
+    addLog('📤 Save exported! +10% XP for 1h!', 'levelup');
+  } else {
+    const rem = Math.ceil((game.exportBonusExpiry - now)/60000);
+    addLog(`📤 Save exported. Bonus active for ${rem}min.`, 'info');
+  }
+  saveGame();
+  updateUI();
+}
+
+function importSave(){
+  document.getElementById('import-file').click();
+}
+
+function handleImportFile(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try {
+      const data = JSON.parse(e.target.result);
+      if(applyLoadedState(data)){
+        localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+        addLog('📥 Save loaded from file!','levelup');
+        renderMap();
+        spawnEnemy();
+        updateUI();
+        renderBackpack();
+        updateSkillButtons();
+        restartCombatTimer();
+      } else {
+        addLog('❌ Invalid save file.','damage');
+      }
+    } catch(err){
+      addLog('❌ File loading error.','damage');
+    }
+    input.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function init(){
+  const hasSave = loadGame();
+  renderMap();
+  spawnEnemy();
+  updateUI();
+  updateSkillButtons();
+  document.querySelectorAll(".skill-btn").forEach(b=>b.addEventListener("click",()=>useSkill(b.dataset.skill)));
+  document.querySelectorAll(".equip-slot").forEach(s=>s.addEventListener("click",()=>unequipItem(s.dataset.slot)));
+  setupTooltips();
+  game.tickInterval=setInterval(tickCooldowns,1000);
+  restartCombatTimer();
+  game.saveInterval = setInterval(saveGame, 10000);
+  if(hasSave) {
+    addLog('📂 Loaded saved progress.','info');
+  } else {
+    addLog('Game started! Combat runs automatically.','info');
+  }
+  addLog('Unlock locations by reaching the required level.','info');
+  addLog('Click a location on the map to select it.','info');
+}
+
+document.addEventListener("DOMContentLoaded",init);
+  </script>
+<div id="tooltip"></div>
+</body>
+</html>
+
